@@ -229,7 +229,7 @@
 
     <!-- ゲーム中のコントロール -->
     <div class="controls" id="game-controls" style="display: none;">
-        <button class="btn btn-secondary" onclick="confirmReset()">リセット</button>
+        <button class="btn btn-secondary" onclick="confirmReturnToTitle()">タイトルへ戻る</button>
     </div>
 
     <!-- スタート画面 -->
@@ -252,7 +252,8 @@
             <p>タイム: <span id="final-time" style="font-size: 1.8rem; font-weight: bold; color: var(--accent-color);"></span> 秒</p>
             <p id="new-record-msg" style="color: #f1c40f; font-weight: bold; display: none;">🎉 ランクイン！ 🎉</p>
             <div style="margin-top: 20px;">
-                <button class="btn btn-accent" onclick="startGame()">もう一度遊ぶ</button>
+                <!-- ここを変更: タイトルへ戻る処理を呼び出す -->
+                <button class="btn btn-accent" onclick="returnToTitle()">タイトルへ戻る</button>
                 <br>
                 <button class="btn btn-secondary" onclick="showRanking()">ランキングを見る</button>
             </div>
@@ -332,10 +333,29 @@
             startTimer();
         }
 
-        function confirmReset() {
-            if(confirm('ゲームをやり直しますか？')) {
-                startGame();
+        function confirmReturnToTitle() {
+            if(confirm('ゲームを中断してタイトルに戻りますか？')) {
+                returnToTitle();
             }
+        }
+
+        // タイトル画面へ戻る（完全にリセット）
+        function returnToTitle() {
+            stopTimer();
+            isPlaying = false;
+            matchedCount = 0;
+            timerEl.innerText = "0.0";
+            
+            // 盤面クリア
+            boardEl.innerHTML = '';
+            
+            // UI状態更新
+            resultScreenEl.classList.remove('show');
+            rankingScreenEl.classList.remove('show');
+            gameControlsEl.style.display = 'none'; // ゲーム中ボタン非表示
+            
+            // スタート画面表示
+            startScreenEl.classList.add('show');
         }
 
         function renderBoard(cards) {
@@ -495,8 +515,7 @@
             
             localStorage.setItem(RANKING_KEY, JSON.stringify(ranking));
 
-            // 今回のスコアがランキングに含まれているか判定（同一スコアがある場合も考慮）
-            // 厳密にはユニークID等が必要だが、簡易的に「5位以内に入ったか」で判定
+            // 今回のスコアがランキングに含まれているか簡易判定
             const isRankIn = ranking.some(r => r.time === score && r.date === newEntry.date);
             return isRankIn;
         }
@@ -531,23 +550,24 @@
                 listEl.innerHTML = html;
             }
 
-            // モーダル制御（他のモーダルが開いていれば閉じるのではなく、上に被せるか切り替える）
-            startScreenEl.classList.remove('show'); // スタート画面から呼ばれた場合一旦閉じる
+            // モーダル制御
+            startScreenEl.classList.remove('show');
             resultScreenEl.classList.remove('show');
             rankingScreenEl.classList.add('show');
         }
 
         function closeRanking() {
             rankingScreenEl.classList.remove('show');
-            // ゲーム中なら何も戻さない、未開始ならスタート画面へ、クリア後ならリザルトへ戻す
-            // 簡易的に「isPlayingがfalseでタイムが0ならスタート画面」「それ以外でタイムありならリザルト」と判定
+            
+            // 状態に応じて戻る画面を決定
             if (!isPlaying && timerEl.innerText === "0.0") {
+                // ゲーム開始前またはタイトルに戻った状態
                 startScreenEl.classList.add('show');
             } else if (!isPlaying && parseFloat(timerEl.innerText) > 0) {
+                // ゲームクリア後（リザルト画面）
                 resultScreenEl.classList.add('show');
             } else {
-                // ゲーム中（ポーズ機能はないが、一応）
-                // 通常ここには来ない（ゲーム中にランキングボタンはないため）
+                // ゲーム中（ここには通常来ないが念の為）
             }
         }
 
