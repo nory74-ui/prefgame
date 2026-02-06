@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>都道府県・県庁所在地マッチングゲーム</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #e74c3c;
+            --bg-color: #f0f4f8;
+            --card-pref-bg: #3498db;
+            --card-city-bg: #e67e22;
+            --text-white: #ffffff;
+            --shadow: 0 4px 6px rgba(0,0,0,0.1);
+            --shadow-drag: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none; /* テキスト選択防止 */
+            -webkit-user-select: none;
+            touch-action: none; /* スクロール防止（ドラッグ操作のため） */
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        /* ヘッダー・スコアエリア */
+        header {
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin: 10px 0;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-between;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            box-shadow: var(--shadow);
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .timer-display { color: var(--primary-color); }
+        .highscore-display { color: var(--accent-color); }
+
+        /* ゲームエリア（グリッド） */
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1.2; /* おおよその比率 */
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        /* カードスタイル */
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: var(--text-white);
+            box-shadow: var(--shadow);
+            cursor: grab;
+            transition: transform 0.2s, opacity 0.3s;
+            position: relative; /* 必要に応じてabsoluteに変更される */
+            z-index: 1;
+            /* テキスト折り返し制御 */
+            text-align: center;
+            padding: 5px;
+            line-height: 1.2;
+        }
+
+        .card:active {
+            cursor: grabbing;
+        }
+
+        .card.type-pref {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+
+        .card.type-city {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+        }
+
+        /* ドラッグ中のスタイル */
+        .card.dragging {
+            position: fixed; /* 画面全体に対して移動 */
+            z-index: 1000;
+            opacity: 0.9;
+            transform: scale(1.1);
+            box-shadow: var(--shadow-drag);
+            pointer-events: none; /* 下にある要素を判定するため */
+        }
+
+        /* 正解時のアニメーション */
+        .card.matched {
+            animation: popOut 0.5s forwards;
+        }
+
+        @keyframes popOut {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.5; }
+            100% { transform: scale(0); opacity: 0; pointer-events: none; }
+        }
+
+        /* 不正解時のアニメーション */
+        .card.shake {
+            animation: shake 0.4s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* プレースホルダー（ドラッグ元の穴埋め） */
+        .placeholder {
+            background: rgba(0,0,0,0.05);
+            border-radius: 8px;
+            border: 2px dashed rgba(0,0,0,0.1);
+        }
+
+        /* コントロールエリア */
+        .controls {
+            text-align: center;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: background 0.3s;
+            touch-action: manipulation; /* ボタンのタップ遅延解消 */
+        }
+
+        button:hover {
+            background-color: #34495e;
+        }
+
+        /* クリア画面オーバーレイ */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        #overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .result-box {
+            background: white;
+            color: var(--primary-color);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
+        }
+
+        .new-record {
+            color: var(--accent-color);
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin: 10px 0;
+            display: none;
+        }
+
+        /* レスポンシブ調整 */
+        @media (min-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            .card { font-size: 1.1rem; }
+            #game-board { gap: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>都道府県・県庁所在地マッチ</h1>
+        <div class="stats-bar">
+            <div class="timer-display">TIME: <span id="timer">0.0</span>s</div>
+            <div class="highscore-display">BEST: <span id="high-score">--</span></div>
+        </div>
+    </header>
+
+    <div id="game-board">
+        <!-- カードはJSで生成されます -->
+    </div>
+
+    <div class="controls">
+        <button onclick="initGame()">リセット / リトライ</button>
+    </div>
+
+    <!-- クリア画面 -->
+    <div id="overlay">
+        <div class="result-box">
+            <h2>GAME CLEAR!</h2>
+            <p>タイム: <span id="final-time" style="font-size: 1.5rem; font-weight: bold;"></span> 秒</p>
+            <p class="new-record" id="new-record-msg">🎉 New Record! 🎉</p>
+            <button onclick="initGame(); document.getElementById('overlay').classList.remove('show');">もう一度遊ぶ</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * データソース
+         * 都道府県名と県庁所在地名が明らかに異なるものを選定
+         */
+        const PREF_DATA = [
+            { id: 1, pref: '北海道', city: '札幌' },
+            { id: 2, pref: '岩手', city: '盛岡' },
+            { id: 3, pref: '宮城', city: '仙台' },
+            { id: 4, pref: '茨城', city: '水戸' },
+            { id: 5, pref: '栃木', city: '宇都宮' },
+            { id: 6, pref: '群馬', city: '前橋' },
+            { id: 7, pref: '神奈川', city: '横浜' },
+            { id: 8, pref: '石川', city: '金沢' },
+            { id: 9, pref: '山梨', city: '甲府' },
+            { id: 10, pref: '愛知', city: '名古屋' },
+            { id: 11, pref: '三重', city: '津' },
+            { id: 12, pref: '滋賀', city: '大津' },
+            { id: 13, pref: '兵庫', city: '神戸' },
+            { id: 14, pref: '島根', city: '松江' },
+            { id: 15, pref: '香川', city: '高松' },
+            { id: 16, pref: '愛媛', city: '松山' },
+            { id: 17, pref: '沖縄', city: '那覇' }
+        ];
+
+        // ゲーム状態管理
+        let startTime = 0;
+        let timerInterval = null;
+        let isPlaying = false;
+        let matchedCount = 0;
+        const PAIRS_TO_USE = 8; // 使用するペア数（8ペア＝16枚）
+
+        // DOM要素
+        const boardEl = document.getElementById('game-board');
+        const timerEl = document.getElementById('timer');
+        const highScoreEl = document.getElementById('high-score');
+        const overlayEl = document.getElementById('overlay');
+        const finalTimeEl = document.getElementById('final-time');
+        const newRecordMsgEl = document.getElementById('new-record-msg');
+
+        // ハイスコア初期表示
+        updateHighScoreDisplay();
+
+        // 初回ゲーム開始
+        initGame();
+
+        /**
+         * ゲーム初期化・リセット
+         */
+        function initGame() {
+            // タイマー停止・リセット
+            stopTimer();
+            timerEl.innerText = "0.0";
+            isPlaying = true;
+            matchedCount = 0;
+            overlayEl.classList.remove('show');
+            newRecordMsgEl.style.display = 'none';
+
+            // データの選定とシャッフル
+            const selectedPairs = shuffleArray([...PREF_DATA]).slice(0, PAIRS_TO_USE);
+            
+            // カードの生成（都道府県カード + 県庁所在地カード）
+            let cards = [];
+            selectedPairs.forEach(pair => {
+                // 都道府県カード
+                cards.push({
+                    id: pair.id,
+                    text: pair.pref,
+                    type: 'pref',
+                    pairId: pair.id
+                });
+                // 県庁所在地カード
+                cards.push({
+                    id: pair.id,
+                    text: pair.city,
+                    type: 'city',
+                    pairId: pair.id
+                });
+            });
+
+            // カード全体のシャッフル
+            cards = shuffleArray(cards);
+
+            // 盤面描画
+            renderBoard(cards);
+
+            // タイマースタート
+            startTimer();
+        }
+
+        /**
+         * 盤面の描画
+         */
+        function renderBoard(cards) {
+            boardEl.innerHTML = '';
+            cards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = `card type-${card.type}`;
+                cardEl.innerText = card.text;
+                cardEl.dataset.pairId = card.pairId;
+                cardEl.dataset.type = card.type;
+                cardEl.dataset.index = index; // グリッド位置管理用
+                
+                // ドラッグイベントの登録 (Pointer Events for PC/Mobile)
+                cardEl.addEventListener('pointerdown', handleDragStart);
+                
+                boardEl.appendChild(cardEl);
+            });
+        }
+
+        /**
+         * ドラッグ＆ドロップロジック (Pointer Events)
+         */
+        let currentDragEl = null;
+        let placeholderEl = null;
+        let startX, startY;
+        let initialRect;
+        let dragOffsetX, dragOffsetY;
+
+        function handleDragStart(e) {
+            if (!isPlaying) return;
+            const target = e.currentTarget;
+            
+            // 既にマッチ済みのカードは操作不可
+            if (target.classList.contains('matched')) return;
+
+            e.preventDefault(); // ブラウザ標準の挙動をキャンセル
+            
+            currentDragEl = target;
+            
+            // 初期位置の取得
+            initialRect = target.getBoundingClientRect();
+            
+            // タップ位置と要素の中心のズレを計算
+            dragOffsetX = e.clientX - initialRect.left;
+            dragOffsetY = e.clientY - initialRect.top;
+
+            // プレースホルダーの作成（元の位置を確保）
+            placeholderEl = document.createElement('div');
+            placeholderEl.className = 'placeholder';
+            // 現在のグリッド内の位置に挿入
+            boardEl.insertBefore(placeholderEl, currentDragEl);
+
+            // ドラッグ要素のスタイル変更（固定配置にして浮かす）
+            currentDragEl.classList.add('dragging');
+            currentDragEl.style.width = `${initialRect.width}px`;
+            currentDragEl.style.height = `${initialRect.height}px`;
+            currentDragEl.style.left = `${initialRect.left}px`;
+            currentDragEl.style.top = `${initialRect.top}px`;
+
+            // グローバルイベントの登録（移動と離脱）
+            window.addEventListener('pointermove', handleDragMove);
+            window.addEventListener('pointerup', handleDragEnd);
+            
+            // 最初の位置合わせ
+            moveAt(e.clientX, e.clientY);
+        }
+
+        function moveAt(pageX, pageY) {
+            // 要素の中心を指の下に持ってくる場合
+            // currentDragEl.style.left = pageX - currentDragEl.offsetWidth / 2 + 'px';
+            // currentDragEl.style.top = pageY - currentDragEl.offsetHeight / 2 + 'px';
+            
+            // 掴んだ位置を維持する場合
+            currentDragEl.style.left = `${pageX - dragOffsetX}px`;
+            currentDragEl.style.top = `${pageY - dragOffsetY}px`;
+        }
+
+        function handleDragMove(e) {
+            if (!currentDragEl) return;
+            e.preventDefault();
+            moveAt(e.clientX, e.clientY);
+        }
+
+        function handleDragEnd(e) {
+            if (!currentDragEl) return;
+
+            // 下にある要素を取得するために一時的に非表示
+            currentDragEl.style.visibility = 'hidden';
+            // タッチ/マウス位置にある要素を取得
+            let elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+            currentDragEl.style.visibility = 'visible';
+
+            // カード要素を探す（内側の文字などをクリックした場合の対策）
+            let targetCard = elemBelow ? elemBelow.closest('.card') : null;
+
+            // 判定ロジック
+            if (targetCard && targetCard !== currentDragEl && !targetCard.classList.contains('matched')) {
+                checkMatch(currentDragEl, targetCard);
+            } else {
+                returnToOriginalPosition();
+            }
+
+            // イベント解除
+            window.removeEventListener('pointermove', handleDragMove);
+            window.removeEventListener('pointerup', handleDragEnd);
+        }
+
+        /**
+         * マッチング判定
+         */
+        function checkMatch(dragged, target) {
+            const id1 = dragged.dataset.pairId;
+            const id2 = target.dataset.pairId;
+            const type1 = dragged.dataset.type;
+            const type2 = target.dataset.type;
+
+            // IDが一致 かつ タイプが異なる（県 vs 市）場合のみ正解
+            if (id1 === id2 && type1 !== type2) {
+                handleSuccess(dragged, target);
+            } else {
+                handleFailure(dragged, target);
+            }
+        }
+
+        /**
+         * 正解時の処理
+         */
+        function handleSuccess(card1, card2) {
+            // プレースホルダーを削除し、カードをDOM上の元の位置に戻す（消去アニメーションのため）
+            resetDragStyles(card1);
+            
+            // アニメーションクラス付与
+            card1.classList.add('matched');
+            card2.classList.add('matched');
+
+            matchedCount++;
+
+            // 全てクリアしたかチェック
+            if (matchedCount === PAIRS_TO_USE) {
+                gameClear();
+            }
+        }
+
+        /**
+         * 不正解時の処理
+         */
+        function handleFailure(card1, card2) {
+            // 元の位置に戻す
+            returnToOriginalPosition();
+            
+            // シェイクアニメーション
+            setTimeout(() => {
+                // targetの方を揺らす（視覚的フィードバック）
+                card2.classList.add('shake');
+                // draggedは戻った後に揺らす
+                card1.classList.add('shake');
+
+                // アニメーション終了後にクラス削除
+                setTimeout(() => {
+                    card2.classList.remove('shake');
+                    card1.classList.remove('shake');
+                }, 400);
+            }, 50); // DOM更新待ち
+        }
+
+        /**
+         * カードを元の場所に戻す
+         */
+        function returnToOriginalPosition() {
+            resetDragStyles(currentDragEl);
+        }
+
+        /**
+         * ドラッグ用スタイルを解除し、グリッド内に戻す
+         */
+        function resetDragStyles(el) {
+            el.classList.remove('dragging');
+            el.style.width = '';
+            el.style.height = '';
+            el.style.left = '';
+            el.style.top = '';
+            el.style.position = '';
+            el.style.zIndex = '';
+            
+            // プレースホルダーがあれば置換
+            if (placeholderEl && placeholderEl.parentNode) {
+                placeholderEl.parentNode.replaceChild(el, placeholderEl);
+            }
+            placeholderEl = null;
+            currentDragEl = null;
+        }
+
+        /**
+         * ゲームクリア処理
+         */
+        function gameClear() {
+            stopTimer();
+            const score = parseFloat(timerEl.innerText);
+            
+            // ハイスコア保存
+            const currentHigh = parseFloat(localStorage.getItem('prefGameHighScore')) || 9999;
+            if (score < currentHigh) {
+                localStorage.setItem('prefGameHighScore', score);
+                newRecordMsgEl.style.display = 'block';
+                updateHighScoreDisplay();
+            }
+
+            finalTimeEl.innerText = score;
+            setTimeout(() => {
+                overlayEl.classList.add('show');
+            }, 500);
+            isPlaying = false;
+        }
+
+        /**
+         * タイマー機能
+         */
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const diff = (now - startTime) / 1000;
+                timerEl.innerText = diff.toFixed(1);
+            }, 100);
+        }
+
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+        }
+
+        /**
+         * ハイスコア表示更新
+         */
+        function updateHighScoreDisplay() {
+            const score = localStorage.getItem('prefGameHighScore');
+            highScoreEl.innerText = score ? score + 's' : '--';
+        }
+
+        /**
+         * ユーティリティ: 配列シャッフル (Fisher-Yates)
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+    </script>
+</body>
+</html>
+
