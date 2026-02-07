@@ -20,7 +20,7 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none;
+            /* touch-action: none; を削除してスクロール可能に */
         }
 
         body {
@@ -32,7 +32,8 @@
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            padding: 10px;
+            /* 上部の余白を確保（スマホのノッチ対策含む） */
+            padding: calc(20px + env(safe-area-inset-top)) 10px 20px 10px;
         }
 
         /* ヘッダー・スコアエリア */
@@ -41,11 +42,13 @@
             width: 100%;
             max-width: 600px;
             margin-bottom: 10px;
+            flex-shrink: 0; /* 縮小しない */
         }
 
         h1 {
             font-size: 1.2rem;
-            margin: 10px 0;
+            margin: 0 0 15px 0;
+            line-height: 1.4;
         }
 
         .stats-bar {
@@ -69,9 +72,11 @@
             gap: 10px;
             width: 100%;
             max-width: 600px;
-            aspect-ratio: 1 / 1.2;
-            margin-bottom: 20px;
+            /* アスペクト比指定を削除し、コンテンツに応じた高さにする */
+            /* aspect-ratio: 1 / 1.2; */ 
+            margin-bottom: 30px;
             position: relative;
+            flex-grow: 1; /* 余白があれば広がる */
         }
 
         /* カードスタイル */
@@ -92,6 +97,11 @@
             text-align: center;
             padding: 5px;
             line-height: 1.2;
+            /* カード自体の高さを確保 */
+            aspect-ratio: 1 / 1; 
+            min-height: 60px;
+            /* カード操作時はブラウザのスクロールを無効化 */
+            touch-action: none; 
         }
 
         .card:active { cursor: grabbing; }
@@ -126,6 +136,7 @@
             background: rgba(0,0,0,0.05);
             border-radius: 8px;
             border: 2px dashed rgba(0,0,0,0.1);
+            aspect-ratio: 1 / 1;
         }
 
         /* 共通ボタン */
@@ -150,7 +161,13 @@
         .btn-secondary { background-color: #95a5a6; }
         .btn-secondary:hover { background-color: #7f8c8d; }
 
-        /* オーバーレイ（スタート画面・リザルト・ランキング共通） */
+        /* ゲーム中コントロール */
+        .controls {
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+
+        /* オーバーレイ */
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -164,6 +181,8 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s;
+            padding: 20px; /* 内部スクロール用余白 */
+            overflow-y: auto; /* 画面が小さい時にスクロール可能に */
         }
         .overlay.show {
             opacity: 1;
@@ -176,10 +195,11 @@
             padding: 30px;
             border-radius: 15px;
             text-align: center;
-            width: 90%;
+            width: 100%;
             max-width: 400px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             position: relative;
+            margin: auto; /* 上下中央配置の補助 */
         }
 
         .modal-title {
@@ -252,7 +272,6 @@
             <p>タイム: <span id="final-time" style="font-size: 1.8rem; font-weight: bold; color: var(--accent-color);"></span> 秒</p>
             <p id="new-record-msg" style="color: #f1c40f; font-weight: bold; display: none;">🎉 ランクイン！ 🎉</p>
             <div style="margin-top: 20px;">
-                <!-- ここを変更: タイトルへ戻る処理を呼び出す -->
                 <button class="btn btn-accent" onclick="returnToTitle()">タイトルへ戻る</button>
                 <br>
                 <button class="btn btn-secondary" onclick="showRanking()">ランキングを見る</button>
@@ -309,7 +328,6 @@
 
         // --- ゲーム進行 ---
         function startGame() {
-            // UIリセット
             startScreenEl.classList.remove('show');
             resultScreenEl.classList.remove('show');
             rankingScreenEl.classList.remove('show');
@@ -320,7 +338,6 @@
             isPlaying = true;
             matchedCount = 0;
             
-            // データ生成
             const selectedPairs = shuffleArray([...PREF_DATA]).slice(0, PAIRS_TO_USE);
             let cards = [];
             selectedPairs.forEach(pair => {
@@ -339,22 +356,16 @@
             }
         }
 
-        // タイトル画面へ戻る（完全にリセット）
         function returnToTitle() {
             stopTimer();
             isPlaying = false;
             matchedCount = 0;
             timerEl.innerText = "0.0";
-            
-            // 盤面クリア
             boardEl.innerHTML = '';
             
-            // UI状態更新
             resultScreenEl.classList.remove('show');
             rankingScreenEl.classList.remove('show');
-            gameControlsEl.style.display = 'none'; // ゲーム中ボタン非表示
-            
-            // スタート画面表示
+            gameControlsEl.style.display = 'none';
             startScreenEl.classList.add('show');
         }
 
@@ -366,7 +377,6 @@
                 cardEl.innerText = card.text;
                 cardEl.dataset.pairId = card.pairId;
                 cardEl.dataset.type = card.type;
-                // Pointer Event登録
                 cardEl.addEventListener('pointerdown', handleDragStart);
                 boardEl.appendChild(cardEl);
             });
@@ -382,18 +392,16 @@
             const target = e.currentTarget;
             if (target.classList.contains('matched')) return;
 
-            e.preventDefault();
+            e.preventDefault(); // ここでカード自体のスクロールを防ぐ
             currentDragEl = target;
             const rect = target.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
             dragOffsetY = e.clientY - rect.top;
 
-            // プレースホルダー作成
             placeholderEl = document.createElement('div');
             placeholderEl.className = 'placeholder';
             boardEl.insertBefore(placeholderEl, currentDragEl);
 
-            // ドラッグ要素スタイル
             currentDragEl.classList.add('dragging');
             currentDragEl.style.width = `${rect.width}px`;
             currentDragEl.style.height = `${rect.height}px`;
@@ -443,14 +451,12 @@
             const type2 = target.dataset.type;
 
             if (id1 === id2 && type1 !== type2) {
-                // 正解
                 resetDragStyles(dragged);
                 dragged.classList.add('matched');
                 target.classList.add('matched');
                 matchedCount++;
                 if (matchedCount === PAIRS_TO_USE) gameClear();
             } else {
-                // 不正解
                 returnToOriginalPosition();
                 setTimeout(() => {
                     target.classList.add('shake');
@@ -479,16 +485,14 @@
             currentDragEl = null;
         }
 
-        // --- ゲームクリア・ランキング処理 ---
+        // --- ゲームクリア・ランキング ---
         function gameClear() {
             stopTimer();
             isPlaying = false;
             const score = parseFloat(timerEl.innerText);
             
-            // ランキング保存と判定
             const isRankIn = saveScore(score);
 
-            // リザルト表示
             document.getElementById('final-time').innerText = score;
             const msg = document.getElementById('new-record-msg');
             msg.style.display = isRankIn ? 'block' : 'none';
@@ -502,22 +506,12 @@
 
         function saveScore(score) {
             let ranking = JSON.parse(localStorage.getItem(RANKING_KEY)) || [];
-            const newEntry = {
-                time: score,
-                date: new Date().toLocaleDateString()
-            };
-            
+            const newEntry = { time: score, date: new Date().toLocaleDateString() };
             ranking.push(newEntry);
-            // タイム昇順ソート
             ranking.sort((a, b) => a.time - b.time);
-            // 上位5件に絞る
             ranking = ranking.slice(0, 5);
-            
             localStorage.setItem(RANKING_KEY, JSON.stringify(ranking));
-
-            // 今回のスコアがランキングに含まれているか簡易判定
-            const isRankIn = ranking.some(r => r.time === score && r.date === newEntry.date);
-            return isRankIn;
+            return ranking.some(r => r.time === score && r.date === newEntry.date);
         }
 
         function getRanking() {
@@ -550,7 +544,6 @@
                 listEl.innerHTML = html;
             }
 
-            // モーダル制御
             startScreenEl.classList.remove('show');
             resultScreenEl.classList.remove('show');
             rankingScreenEl.classList.add('show');
@@ -558,16 +551,10 @@
 
         function closeRanking() {
             rankingScreenEl.classList.remove('show');
-            
-            // 状態に応じて戻る画面を決定
             if (!isPlaying && timerEl.innerText === "0.0") {
-                // ゲーム開始前またはタイトルに戻った状態
                 startScreenEl.classList.add('show');
             } else if (!isPlaying && parseFloat(timerEl.innerText) > 0) {
-                // ゲームクリア後（リザルト画面）
                 resultScreenEl.classList.add('show');
-            } else {
-                // ゲーム中（ここには通常来ないが念の為）
             }
         }
 
