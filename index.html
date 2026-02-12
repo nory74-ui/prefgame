@@ -20,7 +20,6 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            /* touch-action: none; を削除してスクロール可能に */
         }
 
         body {
@@ -31,52 +30,53 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            /* 上部の余白を確保（スマホのノッチ対策含む） */
-            padding: calc(20px + env(safe-area-inset-top)) 10px 20px 10px;
+            /* 画面内に完全に収めるための設定 */
+            height: 100dvh; /* 動的ビューポート（スマホのURLバー対策） */
+            overflow: hidden; /* 全体のスクロールを禁止 */
+            padding: calc(10px + env(safe-area-inset-top)) 10px 10px 10px;
         }
 
-        /* ヘッダー・スコアエリア */
+        /* ヘッダー・スコアエリア（コンパクトに） */
         header {
             text-align: center;
             width: 100%;
             max-width: 600px;
-            margin-bottom: 10px;
-            flex-shrink: 0; /* 縮小しない */
+            flex-shrink: 0;
         }
 
         h1 {
-            font-size: 1.2rem;
-            margin: 0 0 15px 0;
-            line-height: 1.4;
+            font-size: clamp(1rem, 4vw, 1.5rem); /* 画面幅に応じて文字サイズ調整 */
+            margin: 5px 0;
+            line-height: 1.2;
         }
 
         .stats-bar {
             display: flex;
             justify-content: space-between;
             background: white;
-            padding: 10px 20px;
+            padding: 8px 15px;
             border-radius: 50px;
             box-shadow: var(--shadow);
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             font-weight: bold;
+            font-size: clamp(0.8rem, 3.5vw, 1rem);
         }
 
         .timer-display { color: var(--primary-color); }
         .highscore-display { color: var(--accent-color); }
 
-        /* ゲームエリア */
+        /* ゲームエリア（残りのスペースを全て使う） */
         #game-board {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
+            grid-template-rows: repeat(4, 1fr); /* 縦も4等分に固定 */
+            gap: 8px; /* 隙間 */
             width: 100%;
-            max-width: 600px;
-            /* アスペクト比指定を削除し、コンテンツに応じた高さにする */
-            /* aspect-ratio: 1 / 1.2; */ 
-            margin-bottom: 30px;
+            max-width: 800px; /* PCやタブレットで広がりすぎないように */
+            flex-grow: 1; /* 残りの高さを埋める */
+            height: 0; /* flex-growを効かせるためのベース高さ */
+            margin-bottom: 10px;
             position: relative;
-            flex-grow: 1; /* 余白があれば広がる */
         }
 
         /* カードスタイル */
@@ -87,7 +87,7 @@
             justify-content: center;
             align-items: center;
             font-weight: bold;
-            font-size: 0.9rem;
+            font-size: clamp(0.7rem, 3vw, 1.1rem); /* 画面サイズで文字の大きさを変える */
             color: var(--text-white);
             box-shadow: var(--shadow);
             cursor: grab;
@@ -95,12 +95,10 @@
             position: relative;
             z-index: 1;
             text-align: center;
-            padding: 5px;
+            padding: 2px;
             line-height: 1.2;
-            /* カード自体の高さを確保 */
-            aspect-ratio: 1 / 1; 
-            min-height: 60px;
-            /* カード操作時はブラウザのスクロールを無効化 */
+            width: 100%;
+            height: 100%;
             touch-action: none; 
         }
 
@@ -136,7 +134,14 @@
             background: rgba(0,0,0,0.05);
             border-radius: 8px;
             border: 2px dashed rgba(0,0,0,0.1);
-            aspect-ratio: 1 / 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ゲーム中コントロール */
+        .controls {
+            flex-shrink: 0;
+            margin-bottom: 5px;
         }
 
         /* 共通ボタン */
@@ -144,15 +149,15 @@
             background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 12px 30px;
+            padding: 10px 25px;
             border-radius: 25px;
-            font-size: 1rem;
+            font-size: clamp(0.9rem, 3.5vw, 1rem);
             cursor: pointer;
             box-shadow: var(--shadow);
             transition: background 0.3s, transform 0.1s;
             touch-action: manipulation;
             margin: 5px;
-            min-width: 160px;
+            min-width: 140px;
         }
         .btn:hover { background-color: #34495e; }
         .btn:active { transform: scale(0.98); }
@@ -161,13 +166,7 @@
         .btn-secondary { background-color: #95a5a6; }
         .btn-secondary:hover { background-color: #7f8c8d; }
 
-        /* ゲーム中コントロール */
-        .controls {
-            margin-bottom: 20px;
-            flex-shrink: 0;
-        }
-
-        /* オーバーレイ */
+        /* オーバーレイ (モーダル) */
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -181,8 +180,7 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s;
-            padding: 20px; /* 内部スクロール用余白 */
-            overflow-y: auto; /* 画面が小さい時にスクロール可能に */
+            padding: 20px;
         }
         .overlay.show {
             opacity: 1;
@@ -192,19 +190,20 @@
         .modal-box {
             background: white;
             color: var(--primary-color);
-            padding: 30px;
+            padding: 25px;
             border-radius: 15px;
             text-align: center;
             width: 100%;
             max-width: 400px;
+            max-height: 90dvh; /* 画面が小さいときはスクロール可能に */
+            overflow-y: auto;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             position: relative;
-            margin: auto; /* 上下中央配置の補助 */
         }
 
         .modal-title {
             font-size: 1.5rem;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: bold;
         }
 
@@ -216,21 +215,14 @@
             text-align: left;
         }
         .ranking-table th, .ranking-table td {
-            padding: 8px;
+            padding: 8px 4px;
             border-bottom: 1px solid #eee;
         }
         .ranking-table th { color: #7f8c8d; font-size: 0.8rem; }
-        .ranking-table td { font-weight: bold; }
-        .ranking-rank { width: 40px; text-align: center; color: var(--accent-color); }
+        .ranking-table td { font-weight: bold; font-size: 0.9rem; }
+        .ranking-rank { width: 30px; text-align: center; color: var(--accent-color); }
         .ranking-time { text-align: right; }
-        .ranking-date { font-size: 0.8rem; color: #95a5a6; text-align: right;}
-
-        /* レスポンシブ調整 */
-        @media (min-width: 600px) {
-            h1 { font-size: 1.5rem; }
-            .card { font-size: 1.1rem; }
-            #game-board { gap: 15px; }
-        }
+        .ranking-date { font-size: 0.75rem; color: #95a5a6; text-align: right;}
     </style>
 </head>
 <body>
@@ -392,7 +384,7 @@
             const target = e.currentTarget;
             if (target.classList.contains('matched')) return;
 
-            e.preventDefault(); // ここでカード自体のスクロールを防ぐ
+            e.preventDefault();
             currentDragEl = target;
             const rect = target.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
